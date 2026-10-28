@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  CONFLICTING
+}
+
+enum SourceType {
+  EMAIL
+  WEBPAGE
+  PDF
+  IMAGE
+  MANUAL
+  OTHER
+}
+
+model Event {
+  id              String             @id @default(cuid())
+  title           String
+  description     String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  timezone        String             @default("Europe/Berlin")
+  venue           String?
+  roomNumber      String?
+  address         String?
+  language        String?
+  registrationUrl String?
+  registrationRequired Boolean       @default(false)
+  status          VerificationStatus @default(UNVERIFIED)
+  cancelled       Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  sources         EventSource[]
+}
+
+model EventSource {
+  id              String     @id @default(cuid())
+  eventId         String
+  event           Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type            SourceType
+  filename        String?
+  sender          String?
+  subject         String?
+  url             String?
+  messageId       String?
+  evidence        String?
+  extractedFields Json?
+  observedAt      DateTime   @default(now())
+  contentHash     String?
+}
+
+model Task {
+  id          String             @id @default(cuid())
+  title       String
+  description String?
+  dueAt       DateTime?
+  completed   Boolean            @default(false)
+  status      VerificationStatus @default(UNVERIFIED)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  sources     TaskSource[]
+}
+
+model TaskSource {
+  id          String     @id @default(cuid())
+  taskId      String
+  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type        SourceType
+  filename    String?
+  sender      String?
+  subject     String?
+  url         String?
+  messageId   String?
+  evidence    String?
+  observedAt  DateTime   @default(now())
+}
+
+model EmailRecord {
+  id            String   @id @default(cuid())
+  messageId     String   @unique
+  folder        String   @default("INBOX")
+  sender        String?
+  subject       String?
+  receivedAt    DateTime?
+  contentHash   String?
+  category      String?
+  language      String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model WatchedSource {
+  id            String   @id @default(cuid())
+  name          String
+  url           String   @unique
+  enabled       Boolean  @default(true)
+  lastCheckedAt DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
