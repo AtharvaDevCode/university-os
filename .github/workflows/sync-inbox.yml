@@ -1,0 +1,25 @@
+name: Sync University Inbox
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger inbox sync
+        env:
+          CRON_SECRET: ${{ secrets.UNIVERSITY_OS_CRON_SECRET }}
+          SYNC_URL: https://university-os-bay.vercel.app/api/inbox/sync
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing UNIVERSITY_OS_CRON_SECRET repository secret."
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$SYNC_URL"
