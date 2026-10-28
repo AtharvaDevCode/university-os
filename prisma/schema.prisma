@@ -91,6 +91,7 @@ model EmailRecord {
   folder        String   @default("INBOX")
   sender        String?
   subject       String?
+  textBody      String?  @db.Text
   receivedAt    DateTime?
   contentHash   String?
   category      String?
