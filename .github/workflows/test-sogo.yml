@@ -1,4 +1,4 @@
-name: Test SOGo Connectivity
+name: Test SOGo Endpoints
 
 on:
   workflow_dispatch:
@@ -6,28 +6,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
 
     steps:
-      - name: Test SOGo HTTPS and follow redirects
+      - name: Check SOGo endpoints
         run: |
-          set -e
+          for path in \
+            "/" \
+            "/SOGo/" \
+            "/SOGo/so/" \
+            "/SOGo/so/atharva20/Mail" \
+            "/SOGo/dav/"
+          do
+            echo "Testing: https://sogo.uni-koblenz.de${path}"
 
-          echo "Testing SOGo HTTPS connectivity..."
+            curl -sS \
+              --connect-timeout 10 \
+              --max-time 15 \
+              -o /dev/null \
+              -w "HTTP %{http_code} | Redirect: %{redirect_url}\n" \
+              "https://sogo.uni-koblenz.de${path}" || true
 
-          curl -sS -L \
-            --connect-timeout 10 \
-            --max-time 30 \
-            -o /dev/null \
-            -w "\nFinal URL: %{url_effective}\nHTTP status: %{http_code}\n" \
-            https://sogo.uni-koblenz.de/
-
-      - name: Test SOGo response headers
-        run: |
-          echo "Checking response headers..."
-
-          curl -sS -L -I \
-            --connect-timeout 10 \
-            --max-time 30 \
-            https://sogo.uni-koblenz.de/ \
-            | head -n 20
+            echo
+          done
