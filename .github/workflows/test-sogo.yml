@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-      - name: Diagnose SOGo session
+      - name: Inspect university login form
         env:
           SOGO_USERNAME: ${{ secrets.SOGO_USERNAME }}
           SOGO_PASSWORD: ${{ secrets.SOGO_PASSWORD }}
@@ -18,73 +18,57 @@ jobs:
           set +x
 
           python3 <<'PY'
-          import http.cookiejar
-          import json
-          import os
           import urllib.request
           import urllib.error
+          from html.parser import HTMLParser
 
-          BASE = "https://sogo.uni-koblenz.de"
+          url = "https://sogo.uni-koblenz.de/SOGo/so/"
 
-          jar = http.cookiejar.CookieJar()
-          opener = urllib.request.build_opener(
-              urllib.request.HTTPCookieProcessor(jar)
+          request = urllib.request.Request(
+              url,
+              headers={"User-Agent": "Mozilla/5.0"}
           )
 
-          def send(path, method="GET", payload=None):
-              headers = {"Accept": "application/json, text/plain, */*"}
-
-              data = None
-              if payload is not None:
-                  data = json.dumps(payload).encode()
-                  headers["Content-Type"] = "application/json;charset=UTF-8"
-
-              req = urllib.request.Request(
-                  BASE + path,
-                  data=data,
-                  headers=headers,
-                  method=method
-              )
-
-              with opener.open(req, timeout=20) as response:
-                  body = response.read()
-                  print(f"{method} {path}")
-                  print("HTTP:", response.status)
-                  print("Final URL:", response.url)
-                  print("Content-Type:", response.headers.get("Content-Type"))
-                  print("Cookies received:", len(list(jar)))
-                  print("Body length:", len(body))
-
-                  if path == "/SOGo/connect":
-                      print("Login response preview:",
-                            body[:120].decode("utf-8", "replace")
-                            .replace("\n", " ")[:120])
-
-                  return response.status, body
-
           try:
-              send("/SOGo/so/")
-
-              send(
-                  "/SOGo/connect",
-                  "POST",
-                  {
-                      "userName": os.environ["SOGO_USERNAME"],
-                      "password": os.environ["SOGO_PASSWORD"],
-                      "domain": None,
-                      "rememberLogin": 0
-                  }
-              )
-
-              # Inspect a generic SOGo page, not a private message.
-              send("/SOGo/so/atharva/Mail/view")
-
-          except urllib.error.HTTPError as exc:
-              print("HTTP error:", exc.code)
-              print("Redirect location:",
-                    exc.headers.get("Location", "(none)"))
-              raise SystemExit(1)
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  html = response.read().decode("utf-8", "replace")
+                  print("Final URL:", response.url)
+                  print("HTTP status:", response.status)
+                  print("Content type:", response.headers.get("Content-Type"))
           except Exception as exc:
               print("Request failed:", type(exc).__name__)
               raise SystemExit(1)
+
+          class FormInspector(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.in_form = False
+
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+
+                  if tag == "form":
+                      self.in_form = True
+                      print("FORM:", {
+                          k: attrs.get(k)
+                          for k in ("method", "action", "id", "name")
+                      })
+
+                  elif self.in_form and tag == "input":
+                      print("INPUT:", {
+                          k: attrs.get(k)
+                          for k in ("type", "name", "id")
+                      })
+
+                  elif self.in_form and tag == "button":
+                      print("BUTTON:", {
+                          k: attrs.get(k)
+                          for k in ("type", "name", "id")
+                      })
+
+              def handle_endtag(self, tag):
+                  if tag == "form":
+                      self.in_form = False
+
+          FormInspector().feed(html)
           PY
