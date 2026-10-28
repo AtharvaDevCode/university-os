@@ -6,8 +6,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+
     steps:
-      - name: Test SOGo HTTPS
+      - name: Test SOGo HTTPS and follow redirects
         run: |
-          curl -sS -o /dev/null -w "HTTP status: %{http_code}\n" \
-            --connect-timeout 10 https://sogo.uni-koblenz.de/
+          set -e
+
+          echo "Testing SOGo HTTPS connectivity..."
+
+          curl -sS -L \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -o /dev/null \
+            -w "\nFinal URL: %{url_effective}\nHTTP status: %{http_code}\n" \
+            https://sogo.uni-koblenz.de/
+
+      - name: Test SOGo response headers
+        run: |
+          echo "Checking response headers..."
+
+          curl -sS -L -I \
+            --connect-timeout 10 \
+            --max-time 30 \
+            https://sogo.uni-koblenz.de/ \
+            | head -n 20
