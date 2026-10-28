@@ -1,0 +1,13 @@
+name: Test SOGo Connectivity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test SOGo HTTPS
+        run: |
+          curl -sS -o /dev/null -w "HTTP status: %{http_code}\n" \
+            --connect-timeout 10 https://sogo.uni-koblenz.de/
