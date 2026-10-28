@@ -26,6 +26,7 @@ model Event {
   id              String             @id @default(cuid())
   title           String
   description     String?
+  category String @default("Event")
   startsAt        DateTime?
   endsAt          DateTime?
   timezone        String             @default("Europe/Berlin")
