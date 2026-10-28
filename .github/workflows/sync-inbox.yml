@@ -1,25 +1,19 @@
-name: Sync University Inbox
+name: Test University IMAP Connectivity
 
 on:
-  schedule:
-    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
-  sync-inbox:
+  test-connection:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger inbox sync
-        env:
-          CRON_SECRET: ${{ secrets.UNIVERSITY_OS_CRON_SECRET }}
-          SYNC_URL: https://university-os-bay.vercel.app/api/inbox/sync
+      - name: Check DNS resolution
         run: |
-          if [ -z "$CRON_SECRET" ]; then
-            echo "Missing UNIVERSITY_OS_CRON_SECRET repository secret."
-            exit 1
-          fi
+          getent ahostsv4 imap.uni-koblenz.de
 
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $CRON_SECRET" \
-            "$SYNC_URL"
+      - name: Test IMAP port 993
+        run: |
+          timeout 10 bash -c \
+            '</dev/tcp/imap.uni-koblenz.de/993' \
+            && echo "IMAP_PORT_REACHABLE" \
+            || { echo "IMAP_PORT_UNREACHABLE"; exit 1; }
