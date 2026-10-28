@@ -1,4 +1,4 @@
-name: Test SOGo Mail Retrieval
+name: Test SOGo Session
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-      - name: Authenticate and test mail retrieval
+      - name: Diagnose SOGo session
         env:
           SOGO_USERNAME: ${{ secrets.SOGO_USERNAME }}
           SOGO_PASSWORD: ${{ secrets.SOGO_PASSWORD }}
@@ -18,84 +18,73 @@ jobs:
           set +x
 
           python3 <<'PY'
+          import http.cookiejar
           import json
           import os
           import urllib.request
           import urllib.error
-          import http.cookiejar
 
-          base = "https://sogo.uni-koblenz.de"
-          username = os.environ["SOGO_USERNAME"]
-          password = os.environ["SOGO_PASSWORD"]
+          BASE = "https://sogo.uni-koblenz.de"
 
-          cookies = http.cookiejar.CookieJar()
+          jar = http.cookiejar.CookieJar()
           opener = urllib.request.build_opener(
-              urllib.request.HTTPCookieProcessor(cookies)
+              urllib.request.HTTPCookieProcessor(jar)
           )
 
-          def request(url, method="GET", payload=None, headers=None):
-              data = None
-              req_headers = {"Accept": "application/json"}
+          def send(path, method="GET", payload=None):
+              headers = {"Accept": "application/json, text/plain, */*"}
 
+              data = None
               if payload is not None:
                   data = json.dumps(payload).encode()
-                  req_headers["Content-Type"] = "application/json;charset=UTF-8"
-
-              if headers:
-                  req_headers.update(headers)
+                  headers["Content-Type"] = "application/json;charset=UTF-8"
 
               req = urllib.request.Request(
-                  url, data=data, headers=req_headers, method=method
+                  BASE + path,
+                  data=data,
+                  headers=headers,
+                  method=method
               )
-              return opener.open(req, timeout=20)
+
+              with opener.open(req, timeout=20) as response:
+                  body = response.read()
+                  print(f"{method} {path}")
+                  print("HTTP:", response.status)
+                  print("Final URL:", response.url)
+                  print("Content-Type:", response.headers.get("Content-Type"))
+                  print("Cookies received:", len(list(jar)))
+                  print("Body length:", len(body))
+
+                  if path == "/SOGo/connect":
+                      print("Login response preview:",
+                            body[:120].decode("utf-8", "replace")
+                            .replace("\n", " ")[:120])
+
+                  return response.status, body
 
           try:
-              # Establish the SOGo session.
-              request(base + "/SOGo/so/")
+              send("/SOGo/so/")
 
-              # Authenticate using the JSON payload observed in DevTools.
-              response = request(
-                  base + "/SOGo/connect",
-                  method="POST",
-                  payload={
-                      "userName": username,
-                      "password": password,
+              send(
+                  "/SOGo/connect",
+                  "POST",
+                  {
+                      "userName": os.environ["SOGO_USERNAME"],
+                      "password": os.environ["SOGO_PASSWORD"],
                       "domain": None,
                       "rememberLogin": 0
                   }
               )
 
-              body = response.read()
-              print("Login HTTP status:", response.status)
-
-              try:
-                  result = json.loads(body)
-                  print("Login response type:", type(result).__name__)
-              except (ValueError, UnicodeDecodeError):
-                  print("Login response was not JSON")
-
-              # Probe the inbox endpoint without printing email contents.
-              mail_url = (
-                  base + "/SOGo/so/atharva/Mail/0/folderINBOX/64/view"
-              )
-              mail_response = request(mail_url)
-              mail_body = mail_response.read()
-
-              print("Mail endpoint HTTP status:", mail_response.status)
-              print("Mail content type:",
-                    mail_response.headers.get("Content-Type", "unknown"))
-
-              try:
-                  mail_data = json.loads(mail_body)
-                  print("Mail response JSON type:", type(mail_data).__name__)
-                  print("Mail retrieval returned valid JSON: yes")
-              except (ValueError, UnicodeDecodeError):
-                  print("Mail retrieval returned valid JSON: no")
+              # Inspect a generic SOGo page, not a private message.
+              send("/SOGo/so/atharva/Mail/view")
 
           except urllib.error.HTTPError as exc:
-              print("HTTP request failed with status:", exc.code)
+              print("HTTP error:", exc.code)
+              print("Redirect location:",
+                    exc.headers.get("Location", "(none)"))
               raise SystemExit(1)
           except Exception as exc:
-              print("Request failed with exception type:", type(exc).__name__)
+              print("Request failed:", type(exc).__name__)
               raise SystemExit(1)
           PY
