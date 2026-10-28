@@ -1,4 +1,4 @@
-name: Test SOGo Session
+name: Test SOGo Browser Automation
 
 on:
   workflow_dispatch:
@@ -6,10 +6,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
 
     steps:
-      - name: Inspect university login form
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Test university login
         env:
           SOGO_USERNAME: ${{ secrets.SOGO_USERNAME }}
           SOGO_PASSWORD: ${{ secrets.SOGO_PASSWORD }}
@@ -17,58 +28,54 @@ jobs:
           set -euo pipefail
           set +x
 
-          python3 <<'PY'
-          import urllib.request
-          import urllib.error
-          from html.parser import HTMLParser
+          cat > /tmp/test_sogo.py <<'PY'
+          import os
+          from playwright.sync_api import sync_playwright
 
-          url = "https://sogo.uni-koblenz.de/SOGo/so/"
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              context = browser.new_context()
+              page = context.new_page()
 
-          request = urllib.request.Request(
-              url,
-              headers={"User-Agent": "Mozilla/5.0"}
-          )
+              try:
+                  response = page.goto(
+                      "https://sogo.uni-koblenz.de/SOGo/so/",
+                      wait_until="domcontentloaded",
+                      timeout=45000
+                  )
 
-          try:
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  html = response.read().decode("utf-8", "replace")
-                  print("Final URL:", response.url)
-                  print("HTTP status:", response.status)
-                  print("Content type:", response.headers.get("Content-Type"))
-          except Exception as exc:
-              print("Request failed:", type(exc).__name__)
-              raise SystemExit(1)
+                  print("Initial HTTP status:",
+                        response.status if response else "no response")
+                  print("Initial hostname:", page.url.split("/")[2])
 
-          class FormInspector(HTMLParser):
-              def __init__(self):
-                  super().__init__()
-                  self.in_form = False
+                  # Wait for the university's actual login form.
+                  page.locator("input").first.wait_for(timeout=20000)
 
-              def handle_starttag(self, tag, attrs):
-                  attrs = dict(attrs)
+                  inputs = page.locator("input")
+                  print("Input count:", inputs.count())
 
-                  if tag == "form":
-                      self.in_form = True
-                      print("FORM:", {
-                          k: attrs.get(k)
-                          for k in ("method", "action", "id", "name")
-                      })
+                  # Print only field metadata, never values.
+                  for i in range(inputs.count()):
+                      field = inputs.nth(i)
+                      print(
+                          "Input", i,
+                          "type=", field.get_attribute("type"),
+                          "name=", field.get_attribute("name"),
+                          "id=", field.get_attribute("id")
+                      )
 
-                  elif self.in_form and tag == "input":
-                      print("INPUT:", {
-                          k: attrs.get(k)
-                          for k in ("type", "name", "id")
-                      })
+                  # Do not submit credentials to an unknown form.
+                  # First establish which authentication page is displayed.
+                  print("Page title:", (page.title() or "")[:120])
+                  print("Login form detected: yes")
 
-                  elif self.in_form and tag == "button":
-                      print("BUTTON:", {
-                          k: attrs.get(k)
-                          for k in ("type", "name", "id")
-                      })
-
-              def handle_endtag(self, tag):
-                  if tag == "form":
-                      self.in_form = False
-
-          FormInspector().feed(html)
+              except Exception as exc:
+                  print("Browser test failed:", type(exc).__name__)
+                  print("Current hostname:", page.url.split("/")[2])
+                  raise
+              finally:
+                  context.close()
+                  browser.close()
           PY
+
+          python /tmp/test_sogo.py
