@@ -1,0 +1,136 @@
+name: Test SOGo Cloud Access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-sogo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Test SOGo authentication
+        env:
+          SOGO_USERNAME: ${{ secrets.SOGO_USERNAME }}
+          SOGO_PASSWORD: ${{ secrets.SOGO_PASSWORD }}
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+
+            try {
+              const context = await browser.newContext();
+              const page = await context.newPage();
+
+              console.log("Opening University SOGo...");
+
+              await page.goto(
+                "https://sogo.uni-koblenz.de/SOGo/",
+                { waitUntil: "domcontentloaded", timeout: 45000 }
+              );
+
+              await page.locator('#username').waitFor({
+                state: 'visible',
+                timeout: 30000
+              });
+
+              console.log("Login page detected.");
+
+              await page.locator('#username').fill(
+                process.env.SOGO_USERNAME
+              );
+
+              await page.locator('#password').fill(
+                process.env.SOGO_PASSWORD
+              );
+
+              await page.locator(
+                "button[name='_eventId_proceed']"
+              ).click();
+
+              await page.waitForTimeout(5000);
+
+              console.log("Login submission completed.");
+              console.log("Current hostname:", new URL(page.url()).hostname);
+              console.log("Page title:", await page.title());
+
+              const body = await page.locator('body').innerText();
+
+              if (body.includes("Code eingeben")) {
+                console.log("RESULT: Additional code challenge detected.");
+                process.exitCode = 1;
+                return;
+              }
+
+              if (
+                body.includes("Kennung") &&
+                body.includes("Passwort") &&
+                body.includes("Anmeldung")
+              ) {
+                console.log("RESULT: Still on login page.");
+                process.exitCode = 1;
+                return;
+              }
+
+              console.log("Opening SOGo mailbox application...");
+
+              let inboxResponse = null;
+
+              page.on('response', async response => {
+                if (
+                  response.url().includes(
+                    '/Mail/0/folderINBOX/view'
+                  ) &&
+                  response.status() === 200
+                ) {
+                  try {
+                    const data = await response.json();
+
+                    if (Array.isArray(data.uids)) {
+                      inboxResponse = data;
+                    }
+                  } catch {}
+                }
+              });
+
+              await page.goto(
+                "https://sogo.uni-koblenz.de/SOGo/so/atharva/Mail/view",
+                { waitUntil: "domcontentloaded", timeout: 45000 }
+              );
+
+              await page.waitForTimeout(12000);
+
+              if (inboxResponse) {
+                console.log("RESULT: SUCCESS");
+                console.log("Inbox UID count:", inboxResponse.uids.length);
+                console.log("Sync token present:", !!inboxResponse.syncToken);
+              } else {
+                console.log("RESULT: Inbox response not detected.");
+                console.log("Final hostname:", new URL(page.url()).hostname);
+                console.log("Final title:", await page.title());
+                process.exitCode = 1;
+              }
+
+            } finally {
+              await browser.close();
+            }
+          })().catch(error => {
+            console.error("TEST FAILED:", error.message);
+            process.exitCode = 1;
+          });
+          NODE
