@@ -12,14 +12,19 @@ export async function GET(request: NextRequest) {
     const requestedLimit = Number(params.get('limit')) || 20;
     const limit = Math.min(Math.max(requestedLimit, 1), 50);
 
-    const where = query
-      ? {
-          OR: [
-            { subject: { contains: query, mode: 'insensitive' as const } },
-            { sender: { contains: query, mode: 'insensitive' as const } },
-          ],
-        }
-      : undefined;
+    const where = {
+      messageId: {
+        startsWith: 'sogo:INBOX:',
+      },
+      ...(query
+        ? {
+            OR: [
+              { subject: { contains: query, mode: 'insensitive' as const } },
+              { sender: { contains: query, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
 
     const [totalCount, emails] = await Promise.all([
       prisma.emailRecord.count({ where }),
