@@ -6,3 +6,10 @@ node_modules
 coverage
 .env.*
 !.env.example
+# SOGo private data
+sogo_export/
+sogo_responses/
+sogo_message_tests/
+.sogo-profile/
+__pycache__/
+*.pyc

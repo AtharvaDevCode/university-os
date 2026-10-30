@@ -8,10 +8,6 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available' }, { status: 404 });
-  }
-
   try {
     const { id } = await params;
 
@@ -20,12 +16,15 @@ export async function GET(
       select: {
         id: true,
         sender: true,
+        toRecipients: true,
+        ccRecipients: true,
         subject: true,
         receivedAt: true,
         folder: true,
         category: true,
         language: true,
         textBody: true,
+        hasAttachments: true,
       },
     });
 

@@ -5,11 +5,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  // Keep private university email data local until authentication is implemented.
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available' }, { status: 404 });
-  }
-
   try {
     const params = request.nextUrl.searchParams;
     const query = params.get('q')?.trim() || '';
@@ -57,6 +52,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Inbox retrieval failed:', error);
-    return NextResponse.json({ error: 'Could not retrieve inbox.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Could not retrieve inbox.' },
+      { status: 500 },
+    );
   }
 }

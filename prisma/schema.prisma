@@ -23,24 +23,24 @@ enum SourceType {
 }
 
 model Event {
-  id              String             @id @default(cuid())
-  title           String
-  description     String?
-  category String @default("Event")
-  startsAt        DateTime?
-  endsAt          DateTime?
-  timezone        String             @default("Europe/Berlin")
-  venue           String?
-  roomNumber      String?
-  address         String?
-  language        String?
-  registrationUrl String?
-  registrationRequired Boolean       @default(false)
-  status          VerificationStatus @default(UNVERIFIED)
-  cancelled       Boolean            @default(false)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  sources         EventSource[]
+  id                   String             @id @default(cuid())
+  title                String
+  description          String?
+  category             String             @default("Event")
+  startsAt             DateTime?
+  endsAt               DateTime?
+  timezone             String             @default("Europe/Berlin")
+  venue                String?
+  roomNumber           String?
+  address              String?
+  language             String?
+  registrationUrl      String?
+  registrationRequired Boolean            @default(false)
+  status               VerificationStatus @default(UNVERIFIED)
+  cancelled            Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  sources              EventSource[]
 }
 
 model EventSource {
@@ -72,43 +72,95 @@ model Task {
 }
 
 model TaskSource {
-  id          String     @id @default(cuid())
-  taskId      String
-  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  type        SourceType
-  filename    String?
-  sender      String?
-  subject     String?
-  url         String?
-  messageId   String?
-  evidence    String?
-  observedAt  DateTime   @default(now())
+  id         String     @id @default(cuid())
+  taskId     String
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type       SourceType
+  filename   String?
+  sender     String?
+  subject    String?
+  url        String?
+  messageId  String?
+  evidence   String?
+  observedAt DateTime   @default(now())
 }
 
 model EmailRecord {
-  id            String   @id @default(cuid())
-  messageId     String   @unique
-  folder        String   @default("INBOX")
-  sender        String?
-  subject       String?
-  textBody      String?  @db.Text
-  receivedAt    DateTime?
-  contentHash   String?
-  category      String?
-  language      String?
-  processedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String @id @default(cuid())
+  messageId String @unique
+
+  // SOGo identification
+  sogoUid Int?
+  folder  String @default("INBOX")
+
+  // Message metadata
+  sender         String?
+  toRecipients   Json?
+  ccRecipients   Json?
+  subject        String?
+  receivedAt     DateTime?
+  isRead         Boolean   @default(false)
+  hasAttachments Boolean   @default(false)
+
+  // Message content
+  textBody String? @db.Text
+  bodyHtml String? @db.Text
+  rawJson  Json?
+
+  // Existing University OS processing fields
+  contentHash String?
+  category    String?
+  language    String?
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments EmailAttachment[]
+
+  @@unique([folder, sogoUid])
+  @@index([receivedAt])
+  @@index([sender])
+  @@index([isRead])
+}
+
+model EmailAttachment {
+  id            String      @id @default(cuid())
+  emailRecordId String
+  email         EmailRecord @relation(fields: [emailRecordId], references: [id], onDelete: Cascade)
+
+  filename    String?
+  contentType String?
+  size        String?
+  downloadUrl String?
+  viewUrl     String?
+
+  // Preserve original SOGo part information
+  rawPart Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([emailRecordId])
+}
+
+model EmailSyncState {
+  id           String    @id @default(cuid())
+  folder       String    @unique
+  syncToken    String?
+  lastSyncedAt DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model WatchedSource {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String
-  url           String   @unique
-  enabled       Boolean  @default(true)
+  url           String    @unique
+  enabled       Boolean   @default(true)
   lastCheckedAt DateTime?
   lastSuccessAt DateTime?
   lastError     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
