@@ -375,14 +375,12 @@ export default function Home() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">K<span>.</span></div>
-          <div>
-            <strong>KOBLENZ</strong>
-            <small>PERSONAL CAMPUS SPACE</small>
-          </div>
-        </div>
-
-        <div className="workspace-label">WORKSPACE</div>
+  <div className="brand-mark">K</div>
+  <div className="brand-text">
+    <strong>KOBLENZ</strong>
+    <small>PERSONAL CAMPUS SPACE</small>
+  </div>
+</div>
 
         <nav>
           {nav.map((item) => (
